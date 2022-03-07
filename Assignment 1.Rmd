@@ -1,0 +1,115 @@
+---
+title: "Assignment 1"
+author: "Brett Davidoff (CTG-1)"
+date: "March 4th, 2022"
+---
+
+```{r}
+# load modules
+library(caret)
+library(dplyr)
+library(ggplot2)
+library(MASS)
+library(RCurl)
+```
+
+```{r}
+# Get Data
+df_train = read.csv("https://raw.githubusercontent.com/BDavidoff/Data_621/main/moneyball-training-data.csv")
+df_test  = read.csv("https://raw.githubusercontent.com/BDavidoff/Data_621/main/moneyball-evaluation-data.csv")
+```
+
+#Get data summary
+```{r}
+summary(df_train)
+```
+
+#Generate Histograms
+```{r}
+par(mfrow=c(2,2))
+hist(df_train$TEAM_BATTING_H,
+     main = "Total Hits", xlab = "hits (season)",
+     breaks = 20)
+hist(df_train$TEAM_BATTING_2B,
+     main = "Doubles Only", xlab = "doubles (season)",
+     breaks = 20)
+hist(df_train$TEAM_BATTING_3B,
+     main = "Triples Only", xlab = "triples (season)",
+     breaks = 20)
+hist(df_train$TEAM_BATTING_HR,
+     main = "Homers Only", xlab = "homeruns (season)",
+     breaks = 20)
+par(mfrow=c(1,1))
+```
+
+```{r}
+pairs(~ TARGET_WINS + TEAM_BATTING_H + TEAM_BATTING_2B + TEAM_BATTING_3B + TEAM_BATTING_HR, data = df_train)
+
+# check variables
+hist(df_train$TARGET_WINS,xlab="TARGET_WINS",main="")
+str(df_train)
+```
+
+
+#Data cleaning
+```{r}
+wins = df_train$TARGET_WINS
+#Divide by 162 because of the number of games in a season
+df_train$TARGET_WINS = (df_train$TARGET_WINS)/162.
+hist(df_train$TARGET_WINS,xlab="TARGET_WINS",main="")
+```
+
+```{r}
+# flag and remove NA
+for (col in names(which(sapply(df_train, anyNA)))) {
+   new_col = (paste(col,"_NA", sep=""))
+   df_train[,new_col] = as.numeric(is.na(df_train[,col]))
+   df_test[,new_col] = as.numeric(is.na(df_test[,col]))
+}
+df_train[is.na(df_train)] = 0
+df_test[is.na(df_test)] = 0
+
+#Build Models
+n_records = nrow(df_train)
+set.seed(239051)
+
+# Selection types
+full_model = lm(TARGET_WINS ~ ., data=df_train)
+step.model = stepAIC(full_model, direction = "both", trace = FALSE)
+summary(step.model)
+```
+
+```{r}
+# Train
+control = trainControl(method = "cv", number = 10)
+step_model = train(TARGET_WINS ~ ., data=df_train, method = "lmStepAIC", trControl = control, trace=FALSE)
+# Model Acc
+step_model$results
+
+# Final model coefficients
+step_model$finalModel
+
+# Summary of model
+summary(step_model$finalModel)
+```
+
+```{r}
+model = step_model$finalModel
+plot(fitted(model), resid(model))
+hist(model$residuals)
+qqnorm(resid(model))
+qqline(resid(model))
+#QQ plot looks good
+
+```
+
+# Predictions on Evaluation Set
+
+```{r}
+# convert decimals of wins back to number of wins, rounded
+test_preds = round(predict(model, newdata=df_test)*162)
+df_test$PRED_TARGET_WINS = test_preds
+
+hist(test_preds)
+hist(wins)
+```
