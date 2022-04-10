@@ -1,0 +1,140 @@
+---
+title: "Assignment 3"
+author: "Brett Davidoff"
+date: "4/10/2022"
+output: pdf_document
+---
+
+# Library
+
+```{r}
+# load libraries
+library(caret)
+library(corrplot)
+library(dplyr)
+library(ggplot2)
+library(MASS)
+library(pROC)
+library(RCurl)
+```
+
+```{r}
+# load data
+train = read.csv("https://raw.githubusercontent.com/BDavidoff/Data_621/main/crime-training-data_modified.csv")
+test  = read.csv("https://raw.githubusercontent.com/BDavidoff/Data_621/main/crime-evaluation-data_modified.csv")
+```
+
+```{r}
+#head
+head(train)
+head(eval)
+```
+
+```{r}
+#Summary
+summary(train)
+summary(eval)
+```
+
+```{r}
+#str
+str(train)
+str(eval)
+```
+
+
+
+```{r}
+# Correlation matrix of variables
+cor_train = cor(train,  use = "na.or.complete")
+corrplot(cor_train)
+```
+
+```{r}
+pairs(~ target + zn + indus + chas + nox + rm + age + dis + rad + tax + ptratio + lstat + medv, data = train)
+```
+
+```{r}
+par(mfrow=c(2,2))
+
+# target v age 
+plot(train$age,train$target)
+boxplot(age ~ target, train )
+
+# target v ptratio
+plot(train$ptratio,train$target)
+boxplot(ptratio ~ target, train)
+```
+
+NA stuff
+```{r}
+#Check for blank columns 
+names(which(sapply(train, anyNA)))
+
+#The training and testing data sets had no missing values. 
+```
+
+
+# Modeling
+
+## Regression
+
+```{r}
+# preliminary exploration of glm models
+glm(formula = target ~ age, family = binomial(), data = train )
+glm(formula = target ~ ptratio , family = binomial(), data = train)
+```
+
+### All predictor model
+```{r}
+all_preds = glm(target ~ ., family = binomial, data = train)
+summary(all_preds)
+train$preds = ifelse(all_preds$fitted.values > 0.5, 1, 0)
+
+# look at confusion matrix
+confusionMatrix(as.factor(train$preds), as.factor(train$target), positive = "1")
+```
+
+
+
+```{r}
+step_all_preds = stepAIC(all_preds)
+summary(step_all_preds)
+train$preds = ifelse(step_all_preds$fitted.values > 0.5, 1, 0)
+
+# look at confusion matrix
+confusionMatrix(as.factor(train$preds), as.factor(train$target), positive = "1")
+```
+
+### Try treating chas and rad as factors
+
+```{r}
+train_df = cbind(train)
+train_df$chas = as.factor(train_df$chas)
+train_df$rad = as.factor(train_df$rad)
+all_preds_fac = glm(target ~ ., family = binomial, data = train_df)
+summary(all_preds_fac)
+train_df$preds = ifelse(all_preds_fac$fitted.values > 0.5, 1, 0)
+
+# look at confusion matrix
+confusionMatrix(as.factor(train_df$preds), as.factor(train_df$target), positive = "1")
+```
+
+```{r}
+step_all_preds_fac = stepAIC(all_preds_fac)
+summary(step_all_preds_fac)
+train_df$preds = ifelse(step_all_preds_fac$fitted.values > 0.5, 1, 0)
+train_df$pred_proba = step_all_preds_fac$fitted.values
+
+# look at confusion matrix
+confusionMatrix(as.factor(train_df$preds), as.factor(train_df$target), positive = "1")
+```
+
+```{r}
+hist(step_all_preds_fac$fitted.values, main= "Histogram of Predicted Probabilities", xlab="Predicted Probabilities")
+```
+
+```{r}
+proc = roc(train_df$target, train_df$pred_proba)
+plot(proc, asp=NA, legacy.axes=TRUE, print.auc=TRUE, xlab="Specificity")
+```
