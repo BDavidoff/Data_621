@@ -1,0 +1,125 @@
+---
+title: "Assignment 5"
+author: "Brett Davidoff"
+date: "5/15/2022"
+output: html_document
+---
+```{r}
+library(AER)
+library(caret)
+library(corrplot)
+library(dplyr)
+library(MASS)
+library(pROC)
+library(pscl)
+library(RCurl)
+```
+
+
+```{r}
+wine_eval  = read.csv("https://raw.githubusercontent.com/BDavidoff/Data_621/main/wine-evaluation-data.csv")
+wine_train = read.csv("https://raw.githubusercontent.com/BDavidoff/Data_621/main/wine-training-data.csv")
+head(wine_eval)
+head(wine_train)
+```
+
+```{r}
+summary(wine_train)
+```
+
+
+```{r}
+# remove bad cells (NA)
+wine_train = wine_train[complete.cases(wine_train), ]
+summary(wine_train)
+nrow(wine_train)
+```
+
+```{r}
+# correlations visualization 
+cor_wine_train = cor(wine_train)
+corrplot(cor_wine_train)
+```
+
+```{r}
+par(mfrow=c(2,2))
+TARGET = wine_train$TARGET
+plot(TARGET, wine_train$Sulphates)
+plot(TARGET, wine_train$AcidIndex)
+plot(TARGET, wine_train$STARS)
+plot(TARGET, wine_train$pH)
+plot(TARGET, wine_train$VolatileAcidity)
+plot(TARGET, wine_train$Alcohol)
+plot(TARGET, wine_train$Density)
+plot(TARGET, wine_train$LabelAppeal)
+```
+
+```{r}
+# distribution of response variables
+hist(wine_train$TARGET)
+```
+
+```{r}
+# bucketing variables
+acidity = cbind(wine_train$FixedAcidity, wine_train$VolatileAcidity, wine_train$CitricAcid)
+preservative = cbind(wine_train$FreeSulfurDioxide, wine_train$TotalSulfurDioxide, wine_train$Sulphates)
+```
+
+```{r}
+# Poisson models
+poisson1 = glm(TARGET ~., family = poisson, data = wine_train)
+summary(poisson1)
+# select variables based on poisson1
+poisson2 = glm(TARGET ~ wine_train$Alcohol + wine_train$STARS + wine_train$AcidIndex + wine_train$LabelAppeal, family = poisson)
+summary(poisson2)
+```
+
+```{r}
+# reassign values in LabelAppeal to eliminate negative values
+wine_train$LabelAppeal[wine_train$LabelAppeal == "-2"] = "1"
+wine_train$LabelAppeal[wine_train$LabelAppeal == "-1"] = "2"
+wine_train$LabelAppeal[wine_train$LabelAppeal == " 0"] <- "3"
+wine_train$LabelAppeal[wine_train$LabelAppeal == " 1"] <- "4"
+wine_train$LabelAppeal[wine_train$LabelAppeal == " 2"] <- "5"
+```
+
+```{r}
+poisson3 = glm(TARGET ~., family = poisson, data = wine_train)
+poisson4 = glm(TARGET ~ wine_train$VolatileAcidity + wine_train$Alcohol + wine_train$STARS + wine_train$AcidIndex + wine_train$LabelAppeal, family = poisson)
+
+#Summary Information
+summary(poisson4)
+summary(poisson3)
+```
+
+```{r}
+# test for over dispersion
+dispersiontest(poisson1)
+dispersiontest(poisson2)
+```
+
+```{r}
+# negative binomial models
+#neg1 = glm.nb(TARGET ~.,data = wine_train)
+#neg2 = glm.nb(TARGET ~ Alcohol + STARS + AcidIndex + LabelAppeal, data = wine_train)
+```
+```{r}
+# multiple linear regression models
+# linear model with all variables
+lm1 = lm(TARGET ~., data = wine_train)
+summary(lm1)
+```
+```{r}
+# linear model using backward selection - selecting sig variables from lm1
+lm2 = lm(TARGET ~ VolatileAcidity + Chlorides + FreeSulfurDioxide + Density + Alcohol + LabelAppeal + AcidIndex + STARS, data = wine_train)
+summary(lm2)
+# selecting the most significant variables
+lm3 = lm(TARGET ~ VolatileAcidity + Alcohol + LabelAppeal + AcidIndex + STARS, data = wine_train)
+summary(lm3)
+```
+
+```{r}
+# stepwise regression
+steplm = stepAIC(lm1, direction = "both", trace = FALSE)
+summary(steplm)
+```
