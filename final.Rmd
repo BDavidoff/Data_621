@@ -1,0 +1,150 @@
+---
+title: "Final"
+author: "Brett Davidoff"
+date: "5/22/2022"
+output: html_document
+---
+
+```{r}
+# load libraries
+library(caret)
+library(corrplot)
+library(dplyr)
+library(plyr)
+library(ggplot2)
+library(MASS)
+library(pscl)
+library(pROC)
+library(RCurl)
+library(ROCR)
+library(ResourceSelection)
+library(tidyr)
+```
+
+```{r}
+#Get data
+filePath = "https://raw.githubusercontent.com/BDavidoff/Data_621/main/CHD_preprocessed.csv"
+df = read.csv(filePath)
+df[df$male != 1,]
+df[df$male == 1,]
+sum(!complete.cases(df))
+```
+
+```{r}
+# inspect the imported data
+df
+nrow(df)
+summary(df)
+dim(df)
+str(df)
+```
+
+#Inspect individual variables of interest
+```{r}
+# age
+hist(df$age)
+summary(df$age)
+
+# sex
+ggplot(df, aes(male)) +geom_bar()
+df %>% group_by(male) %>% summarize(count=n())
+```
+
+```{r}
+#cleaning
+df = df[complete.cases(df), ]
+dim(df)
+```
+
+
+```{r}
+#Check variable distributions and write to plot graph
+ggplot(gather(df), aes(value)) + 
+    geom_histogram(bins = 10) + 
+    facet_wrap(~key, scales = 'free_x')
+```
+
+
+```{r}
+#generate pairs
+pairs(df)
+```
+
+
+```{r}
+# plot response variable "TenYearCHD" against age
+par(mfrow=c(2,2))
+plot(df$age, df$TenYearCHD)
+boxplot(age ~ TenYearCHD, df)
+
+# plot response variable again "cigsperday"
+plot(df$totChol, df$TenYearCHD)
+boxplot(totChol ~ TenYearCHD, df)
+```
+
+```{r}
+#creating training and testing sets
+n <- nrow(df)
+trainIndex = sample(1:n, size = round(0.75*n), replace=FALSE)
+train = df[trainIndex ,]
+test = df[-trainIndex ,]
+```
+
+```{r}
+#first model testing
+model1 = glm(TenYearCHD ~.,family=binomial,data=train)
+summary(model1)
+```
+
+```{r}
+#2nd model (Stepwise) testing
+model2 = stepAIC(model1)
+summary(model2)
+```
+
+```{r}
+# 3rd model (manual select) testing
+model3 = glm(TenYearCHD ~ male + age + cigsPerDay + prevalentHyp + totChol + sysBP, family = binomial, data = df)
+summary(model3)
+```
+
+
+```{r}
+# perform model fit with McFadden R^2 index
+pR2(model1)
+pR2(model2)
+pR2(model3)
+```
+
+
+```{r}
+# assessing predictive ability of model
+fitted.results = predict(model2, test, type = 'response')
+fitted.results = ifelse(fitted.results > 0.5,1,0)
+
+misClasificError = mean(fitted.results != test$TenYearCHD)
+1-misClasificError
+```
+
+```{r}
+#assess all models and compare against each other
+p <- predict(model2, test, type="response")
+pr <- prediction(p, test$TenYearCHD)
+prf <- performance(pr, measure = "tpr", x.measure = "fpr")
+ 
+p2 <- predict(model1, test, type="response")
+pr2 <- prediction(p2, test$TenYearCHD)
+prf2 <- performance(pr2, measure = "tpr", x.measure = "fpr")
+
+plot(prf)
+auc <- performance(pr, measure = "auc")
+auc <- auc@y.values[[1]]
+auc
+```
+
+
+```{r}
+num =  0.0664
+exp(num) / (1 + exp(num))
+```
+
